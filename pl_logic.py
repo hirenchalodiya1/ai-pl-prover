@@ -52,6 +52,37 @@ class Knowledge(object):
         return [self.formula]
 
 
+class Pair(object):
+    element1 = None
+    element2 = None
+    resolvent = None
+    is_contradict = None
+
+    def __init__(self, e1, e2):
+        self.element1 = e1
+        self.element2 = e2
+
+    def resolve(self):
+        self.resolvent = BinaryOperation("|", self.element1, self.element2).optimize()
+        if not self.resolvent:
+            self.is_contradict = type(self.element1) is str or type(self.element2) is str
+        else:
+            self.is_contradict = False
+
+    def __eq__(self, other):
+        if type(other) is not Pair:
+            return False
+
+        e1 = self.element1
+        e2 = self.element2
+        oe1 = other.element1
+        oe2 = other.element2
+        return (e1 == oe1 and e2 == oe2) or (e1 == oe2 and e2 == oe1)
+
+    def __str__(self):
+        return f"[ {repr(self.element1)} and {repr(self.element2)} ]"
+
+
 class PLLogicProblem(object):
     # inputs
     knowledge_base = None
@@ -154,7 +185,7 @@ class PLLogicProblem(object):
 
         ret += "\nSteps:\n"
         for s in self.steps_to_prove:
-            ret += f'Resolvent: {repr(s[0])}, Pair: {s[1]}\n'
+            ret += f'Resolvent: {repr(s.resolvent)}, Pair: {s}\n'
 
         ret += "\nResult:\n"
         ret += f"Above premise is {self.is_premise_true}\n"
@@ -184,32 +215,6 @@ class PLLogicProblem(object):
     #     return ret
 
     def prove(self):
-        class Pair(object):
-            element1 = None
-            element2 = None
-            resolvent = None
-
-            def __init__(self, e1, e2):
-                self.element1 = e1
-                self.element2 = e2
-                self._find_resolvent()
-
-            def _find_resolvent(self):
-                self.resolvent = BinaryOperation("|", self.element1, self.element2).optimize()
-
-            def __eq__(self, other):
-                if type(other) is not Pair:
-                    return False
-
-                e1 = self.element1
-                e2 = self.element2
-                oe1 = other.element1
-                oe2 = other.element2
-                return (e1 == oe1 and e2 == oe2) or (e1 == oe2 and e2 == oe1)
-
-            def __str__(self):
-                return f"[ {repr(self.element1)} and {repr(self.element2)} ]"
-
         def is_resolvable(cl1, cl2):
             literals1 = cl1.segregate("|") if type(cl1) is BinaryOperation else [cl1]
             literals2 = cl2.segregate("|") if type(cl2) is BinaryOperation else [cl2]
@@ -227,7 +232,8 @@ class PLLogicProblem(object):
                         select_pair = Pair(q, a)
                         if select_pair not in visited and select_pair not in selected_pairs:
                             selected_pairs.append(select_pair)
-            return selected_pairs
+            selected_pairs.sort(key=lambda x: len(x.element1)+len(x.element2))
+            return selected_pairs[0] if selected_pairs else None
 
         kb_clauses = list(self.segregated_knowledge_base_clauses)
         query_clauses = list(self.segregated_query_clauses)
@@ -238,31 +244,27 @@ class PLLogicProblem(object):
         # Execute till you find clauses
         while True:
             # find resolvable pair
-            # if you have more then multiple clauses then we need to contradict only one of them
-            # as they have AND relation between them
-            pairs = find_resolvable_pair(kb_clauses, query_clauses, resolved_pairs)
+            pair = find_resolvable_pair(kb_clauses, query_clauses, resolved_pairs)
 
             # if we don't have pair then premise is false
-            if not pairs:
+            if not pair:
                 self.is_premise_true = False
                 return
 
-            # add pairs to resolved pair
-            resolved_pairs += pairs
+            # resolve pair
+            pair.resolve()
 
-            # now check each pair
-            for pair in pairs:
-                # find resolvent
-                resolvent = pair.resolvent
+            # add pair to resolved pair
+            resolved_pairs.append(pair)
 
-                # add resolvent and pair to steps
-                self.steps_to_prove.append((resolvent, pair))
+            # add pair to steps of proof
+            self.steps_to_prove.append(pair)
 
-                # if resolvent is empty then we have contradiction means our premise is True
-                if not resolvent:
-                    self.is_premise_true = True
-                    return
+            # does pair proves contradiction
+            if pair.is_contradict:
+                self.is_premise_true = True
+                return
 
-                # add resolvent to query clause if already not present
-                if resolvent not in query_clauses:
-                    query_clauses.append(resolvent)
+            # add resolvent to query clause if already not present
+            if pair.resolvent and pair.resolvent not in query_clauses:
+                query_clauses.append(pair.resolvent)

@@ -22,6 +22,11 @@ class UnaryOperation(object):
             return False
         return self.operator == other.operator and self.operand == other.operand
 
+    def __len__(self):
+        if self.operand in [BinaryOperation, UnaryOperation]:
+            return 1 + len(self.operand)
+        return 1
+
     def eliminate_iff(self):
         if type(self.operand) in [UnaryOperation, BinaryOperation]:
             self.operand.eliminate_iff()
@@ -94,6 +99,11 @@ class BinaryOperation(object):
             elif self.left_operand == other.left_operand and self.right_operand == other.right_operand:
                 return True
         return False
+
+    def __len__(self):
+        left_len = len(self.left_operand) if type(self.left_operand) is not str else 1
+        right_len = len(self.right_operand) if type(self.right_operand) is not str else 1
+        return left_len + right_len
 
     def eliminate_iff(self):
         if type(self.left_operand) in [UnaryOperation, BinaryOperation]:

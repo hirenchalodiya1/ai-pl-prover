@@ -1,0 +1,10 @@
+# python cache
+__pychache__/
+*.pyc
+
+# Pip lock file
+Pipfile.lock
+
+# ignore folder
+Propositional-logic-prover/
+.idea/

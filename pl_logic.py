@@ -11,7 +11,7 @@ class Knowledge(object):
             self.formula = formula
 
     def __repr__(self):
-        return repr(self.formula) if type(self.formula) is not str else f"{self.formula}"
+        return repr(self.formula)
 
     def __str__(self):
         return str(self.formula)
@@ -22,29 +22,22 @@ class Knowledge(object):
         self._parse_or_and()
 
     def _eliminate_iff_and_implication(self):
-        if type(self.formula) in [BinaryOperation, UnaryOperation]:
-            self.formula.eliminate_iff()
-            # to be safe side
-            self.formula.eliminate_iff()
-            self.formula.eliminate_implication()
-            # to be safe side
-            self.formula.eliminate_implication()
+        self.formula.eliminate_iff()
+        self.formula.eliminate_implication()
+
+        # to be safe side
+        self.formula.eliminate_iff()
+        self.formula.eliminate_implication()
 
     def _parse_not(self):
-        if type(self.formula) in [BinaryOperation, UnaryOperation]:
-            self.formula = self.formula.parse_not()
-
+        self.formula = self.formula.parse_not()
         # to be safe side
-        if type(self.formula) in [BinaryOperation, UnaryOperation]:
-            self.formula = self.formula.parse_not()
+        self.formula = self.formula.parse_not()
 
     def _parse_or_and(self):
-        if type(self.formula) in [UnaryOperation, BinaryOperation]:
-            self.formula = self.formula.parse_or_and()
-
+        self.formula = self.formula.parse_or_and()
         # to be safe side
-        if type(self.formula) in [UnaryOperation, BinaryOperation]:
-            self.formula = self.formula.parse_or_and()
+        self.formula = self.formula.parse_or_and()
 
     def segregate(self, symbol):
         if type(self.formula) is BinaryOperation:
@@ -62,13 +55,6 @@ class Pair(object):
         self.element1 = e1
         self.element2 = e2
 
-    def resolve(self):
-        self.resolvent = BinaryOperation("|", self.element1, self.element2).optimize()
-        if not self.resolvent:
-            self.is_contradict = type(self.element1) is str or type(self.element2) is str
-        else:
-            self.is_contradict = False
-
     def __eq__(self, other):
         if type(other) is not Pair:
             return False
@@ -80,7 +66,21 @@ class Pair(object):
         return (e1 == oe1 and e2 == oe2) or (e1 == oe2 and e2 == oe1)
 
     def __str__(self):
-        return f"[ {repr(self.element1)} and {repr(self.element2)} ]"
+        return f"({self.element1}, {self.element2})"
+
+    def __repr__(self):
+        return str(self)
+
+    def __len__(self):
+        return len(self.element1) + len(self.element2)
+
+    def resolve(self):
+        self.resolvent = BinaryOperation("|", self.element1, self.element2).optimize()
+        if not self.resolvent:
+            # P|Q and !P|!Q this resolves none but they do not contradict each other
+            self.is_contradict = len(self.element1) == 1 and len(self.element2) == 1
+        else:
+            self.is_contradict = False
 
 
 class PLLogicProblem(object):
@@ -99,7 +99,7 @@ class PLLogicProblem(object):
 
     # prover
     steps_to_prove = None
-    is_premise_true = None
+    is_query_true = None
 
     def __init__(self, knowledge_base, query, mode):
         self.mode = mode
@@ -118,12 +118,11 @@ class PLLogicProblem(object):
         negated_proposition = UnaryOperation("!", self.query.formula)
         self.negated_cnf_query = Knowledge(negated_proposition, by_formula=True)
         self.negated_cnf_query.convert_to_cnf()
-
         # segregate query and knowledge base
         self._prepare_segregation()
 
         # optimize knowledge base and query
-        self._optimize_kb_and_premise()
+        self._optimize_kb_and_query()
 
         # prove query :)
         self.prove()
@@ -136,7 +135,7 @@ class PLLogicProblem(object):
 
         self.segregated_query_clauses = self.negated_cnf_query.segregate("&")
 
-    def _optimize_kb_and_premise(self):
+    def _optimize_kb_and_query(self):
         # optimize segregated formulas
         def optimize(x):
             if type(x) is BinaryOperation:
@@ -157,38 +156,69 @@ class PLLogicProblem(object):
                 temp.append(t)
         self.segregated_query_clauses = temp
 
+    def print_result(self, force=False, avoid=False):
+        if avoid:
+            print("1" if self.is_query_true else "0")
+        elif force:
+            print(self)
+        else:
+            if self.mode == 0:
+                print("1" if self.is_query_true else "0")
+            else:
+                i = 1
+                for t in self.segregated_knowledge_base_clauses:
+                    print(f"{i:2}. {t} (CNF form)")
+                    i += 1
+                for t in self.segregated_query_clauses:
+                    print(f"{i:2}. {t} (Negation of query)")
+                    i += 1
+                for t in self.steps_to_prove:
+                    if t.resolvent:
+                        print(f"{i:2}. {t.resolvent} [Using pair {t}]")
+                    else:
+                        if t.is_contradict:
+                            print(f"{i:2}. Contradiction !! [Using pair {t}]")
+                        else:
+                            print(f"{i:2}. Resolved pair {t}")
+                    i += 1
+                if self.is_query_true:
+                    print("1")
+                else:
+                    print(f"{i:2}. No pair found that supports query clauses or resolved clauses")
+                    print("0")
+
     def __str__(self):
         ret = "------------------------------\n"
         ret += f'Mode: {self.mode}\n'
 
         ret += "\nStatement to prove:\n"
-        ret += f'{repr(self.query)}\n'
+        ret += f'{self.query}\n'
 
         ret += "\nKnowledge base:\n"
         for k in self.knowledge_base:
-            ret += f'{repr(k)}\n'
+            ret += f'{k}\n'
 
         ret += "\nCNF Knowledge base:\n"
         for k in self.CNF_KB:
-            ret += f'{repr(k)}\n'
+            ret += f'{k}\n'
 
         ret += "\nNegation of statement to prove:\n"
-        ret += f'{repr(self.negated_cnf_query)}\n'
+        ret += f'{self.negated_cnf_query}\n'
 
         ret += "\nCNF Knowledge base segregated by AND:\n"
         for f in self.segregated_knowledge_base_clauses:
-            ret += f'{repr(f) if type(f) is not str else f"{f}"}\n'
+            ret += f'{f}\n'
 
-        ret += "\nNegation of statement to prove (segregated by AND):\n"
+        ret += "\nNegation of query to prove (segregated by AND):\n"
         for f in self.segregated_query_clauses:
-            ret += f'{repr(f) if type(f) is not str else f"{f}"}\n'
+            ret += f'{f}\n'
 
         ret += "\nSteps:\n"
         for s in self.steps_to_prove:
-            ret += f'Resolvent: {repr(s.resolvent)}, Pair: {s}\n'
+            ret += f'Resolvent: {s.resolvent}, Pair: {s}\n'
 
         ret += "\nResult:\n"
-        ret += f"Above premise is {self.is_premise_true}\n"
+        ret += f"Above Query is {self.is_query_true}\n"
         ret += "------------------------------"
         return ret
 
@@ -232,7 +262,8 @@ class PLLogicProblem(object):
                         select_pair = Pair(q, a)
                         if select_pair not in visited and select_pair not in selected_pairs:
                             selected_pairs.append(select_pair)
-            selected_pairs.sort(key=lambda x: len(x.element1)+len(x.element2))
+            # sort by length of pair, we are preferring unit resolution
+            selected_pairs.sort(key=lambda x: len(x))
             return selected_pairs[0] if selected_pairs else None
 
         kb_clauses = list(self.segregated_knowledge_base_clauses)
@@ -246,9 +277,9 @@ class PLLogicProblem(object):
             # find resolvable pair
             pair = find_resolvable_pair(kb_clauses, query_clauses, resolved_pairs)
 
-            # if we don't have pair then premise is false
+            # if we don't have pair then query is false
             if not pair:
-                self.is_premise_true = False
+                self.is_query_true = False
                 return
 
             # resolve pair
@@ -262,7 +293,7 @@ class PLLogicProblem(object):
 
             # does pair proves contradiction
             if pair.is_contradict:
-                self.is_premise_true = True
+                self.is_query_true = True
                 return
 
             # add resolvent to query clause if already not present

@@ -60,15 +60,20 @@ def take_input(hard_input):
             # now time to add proposition inputs
             inputs[0].append(input())
         except ValueError as e:
-            print("Provide number of line as integer")
+            print("Provide number of line as integer", e)
     return inputs
 
 
 def run(hard_input=False):
     inputs = take_input(hard_input)
+    # for each input create PL Logic problem and solve it
     for obj in inputs:
         pl_problem = Parser(obj).get_parsed_pl_problem()
-        print(pl_problem)
+        # avoid flag: if True then mode parameter will be ignored and only result will print
+        # avoid flag: this flag is designed for HackerRank
+        # force flag: if true then mode parameter will be ignored and everything will print
+        # force flag: this flag is designed for development or curiosity !!
+        pl_problem.print_result(avoid=False, force=True)
 
 
 if __name__ == "__main__":

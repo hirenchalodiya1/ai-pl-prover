@@ -1,6 +1,30 @@
-4 0
-P|(Q&(R>T))
-P>R
-Q>T
-Q>(R=T)
+7 1
+(S&W)>E
+(W&P)>H
+R>!H
+R>G
+W
+R
+S
+E
+
+3 1
+M>I
+!M>A
+(I|A)>H
+!H
+
+6 1
+A>B
+!B
+!A>(C|D)
+C>E
+F>!E
+F
+D
+
+3 1
+(P>Q)>Q
+(P>P)>R
+(R>S)>!(S>Q)
 R

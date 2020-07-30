@@ -1,3 +1,42 @@
+class Operand(object):
+    value = None
+
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return f"{self.value}"
+
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        if type(other) is not Operand:
+            return False
+        return self.value == other.value
+
+    def __len__(self):
+        return 1
+
+    def eliminate_iff(self):
+        pass
+
+    def eliminate_implication(self):
+        pass
+
+    def parse_not(self):
+        # Return itself
+        return self
+
+    def propagate_not(self):
+        # Return negation of itself, no need to parse further because it will create loop
+        return UnaryOperation("!", self)
+
+    def parse_or_and(self):
+        # Return itself
+        return self
+
+
 class UnaryOperation(object):
     operator = None
     operand = None
@@ -6,16 +45,17 @@ class UnaryOperation(object):
         self.operator = operator
         self.operand = operand
 
-    def __repr__(self):
-        o = self.operand
-
-        ret = f'{self.operator}'
-        ret += f'({repr(o)})' if type(o) is not str else f'{o}'
-        return ret
-
     def __str__(self):
-        return f'{self.operator}{self.operand}'
-        # return f'[Unary: {self.operator}, {self.operand}]'
+        o = str(self.operand)
+
+        if len(o) > 1:
+            return f"{self.operator}({o})"
+        return f"{self.operator}{o}"
+
+    def __repr__(self):
+        if type(self.operand) is Operand:
+            return f"{self.operator}{repr(self.operand)}"
+        return f'[Unary: {self.operator}, {repr(self.operand)}]'
 
     def __eq__(self, other):
         if type(other) is not UnaryOperation:
@@ -28,32 +68,37 @@ class UnaryOperation(object):
         return 1
 
     def eliminate_iff(self):
-        if type(self.operand) in [UnaryOperation, BinaryOperation]:
-            self.operand.eliminate_iff()
+        # pass to operand
+        self.operand.eliminate_iff()
 
     def eliminate_implication(self):
-        if type(self.operand) in [UnaryOperation, BinaryOperation]:
-            self.operand.eliminate_implication()
+        # pass to operand
+        self.operand.eliminate_implication()
 
     def parse_not(self):
-        if type(self.operand) in [UnaryOperation, BinaryOperation]:
-            if self.operator == "!":
-                return self.operand.propagate_not()
-            return self.operand.parse_not()
+        # if operator is NOT then propagate to operand
+        if self.operator == "!":
+            return self.operand.propagate_not()
+
+        # otherwise parse operand and return self
+        self.operand = self.operand.parse_not()
         return self
 
     def propagate_not(self):
+        # case !(!A) = A, return operand with further parsing
         if self.operator == "!":
-            return self.operand
+            return self.operand.parse_not()
+
+        # do nothing
         return self
 
     def parse_or_and(self):
-        if self.operand in [BinaryOperation, UnaryOperation]:
-            operand = self.parse_not()
-            if operand in [BinaryOperation, UnaryOperation]:
-                return operand.parse_or_and()
-            else:
-                return operand
+        # case !A return !A
+        if type(self.operand) is Operand:
+            return self
+
+        # parse NOT first on operand and then check OR AND
+        self.operand = self.operand.parse_not().parse_or_and()
         return self
 
 
@@ -67,22 +112,22 @@ class BinaryOperation(object):
         self.left_operand = left_operand
         self.right_operand = right_operand
 
+    def __str__(self):
+        lo = str(self.left_operand)
+        ro = str(self.right_operand)
+        o = self.operator
+
+        ret = ""
+        ret += f'({lo})' if len(lo) > 2 else f'{lo}'
+        ret += f'{o}'
+        ret += f'({o})' if len(ro) > 2 else f'{ro}'
+        return ret
+
     def __repr__(self):
         lo = self.left_operand
         ro = self.right_operand
         o = self.operator
-
-        ret = ""
-        ret += f'({repr(lo)})' if type(lo) is not str else f'{lo}'
-        ret += f'{o}'
-        ret += f'({repr(ro)})' if type(ro) is not str else f'{ro}'
-        return ret
-
-    def __str__(self):
-        lo = self.left_operand
-        ro = self.right_operand
-        o = self.operator
-        return f'[Binary: {o}, {lo}, {ro}]'
+        return f'[Binary: {o}, {repr(lo)}, {repr(ro)}]'
 
     def __eq__(self, other):
         if type(other) is not BinaryOperation:
@@ -101,16 +146,14 @@ class BinaryOperation(object):
         return False
 
     def __len__(self):
-        left_len = len(self.left_operand) if type(self.left_operand) is not str else 1
-        right_len = len(self.right_operand) if type(self.right_operand) is not str else 1
-        return left_len + right_len
+        return len(self.left_operand) + len(self.right_operand)
 
     def eliminate_iff(self):
-        if type(self.left_operand) in [UnaryOperation, BinaryOperation]:
-            self.left_operand.eliminate_iff()
-        if type(self.right_operand) in [UnaryOperation, BinaryOperation]:
-            self.right_operand.eliminate_iff()
+        # Eliminate iff from right left operand first
+        self.left_operand.eliminate_iff()
+        self.right_operand.eliminate_iff()
 
+        # replace A=B to (A>B)&(B>A)
         if self.operator == "=":
             self.operator = "&"
             lo = self.left_operand
@@ -119,61 +162,56 @@ class BinaryOperation(object):
             self.right_operand = BinaryOperation(">", ro, lo)
 
     def eliminate_implication(self):
-        if type(self.left_operand) in [UnaryOperation, BinaryOperation]:
-            self.left_operand.eliminate_implication()
+        # Eliminate implication from left right operand first
+        self.left_operand.eliminate_implication()
+        self.right_operand.eliminate_implication()
 
-        if type(self.right_operand) in [UnaryOperation, BinaryOperation]:
-            self.right_operand.eliminate_implication()
-
+        # replace A>B to !A|B
         if self.operator == ">":
             self.operator = "|"
             self.left_operand = UnaryOperation("!", self.left_operand)
 
     def parse_not(self):
-        if type(self.left_operand) in [UnaryOperation, BinaryOperation]:
-            self.left_operand = self.left_operand.parse_not()
-
-        if type(self.right_operand) in [UnaryOperation, BinaryOperation]:
-            self.right_operand = self.right_operand.parse_not()
-
+        # parse not in left and right operand
+        self.left_operand = self.left_operand.parse_not()
+        self.right_operand = self.right_operand.parse_not()
+        # return it self
         return self
 
     def propagate_not(self):
-        # here we can safely assume that we have only AND and OR operators are remained
-        propagate_to_left_right = False
+        # This function is only implemented for AND OR operator
+        propagate_to_left_right = self.operator in ["|", "&"]  # check OR AND operator
+
         operator, lo, ro = None, None, None
+
+        # case !(A&B) --- !A|!B
         if self.operator == "&":
             operator = "|"
-            propagate_to_left_right = True
+        # case !(A|B) --- !A&!B
         if self.operator == "|":
             operator = "&"
-            propagate_to_left_right = True
 
         if propagate_to_left_right:
-            if type(self.left_operand) in [UnaryOperation, BinaryOperation]:
-                lo = self.left_operand.propagate_not()
-            else:
-                lo = UnaryOperation("!", self.left_operand).parse_not()
-
-            if type(self.right_operand) in [UnaryOperation, BinaryOperation]:
-                ro = self.right_operand.propagate_not()
-            else:
-                ro = UnaryOperation("!", self.right_operand).parse_not()
-        return BinaryOperation(operator, lo, ro)
+            # propagate NOT to left right operand
+            lo = self.left_operand.propagate_not().parse_not()
+            ro = self.right_operand.propagate_not().parse_not()
+            return BinaryOperation(operator, lo, ro)
+        else:
+            # do nothing
+            return self
 
     def parse_or_and(self):
         # parse OR AND in left operand
-        if type(self.left_operand) in [BinaryOperation, UnaryOperation]:
-            self.left_operand = self.left_operand.parse_or_and()
+        self.left_operand = self.left_operand.parse_or_and()
         # parse OR AND in right operand
-        if type(self.right_operand) in [BinaryOperation, UnaryOperation]:
-            self.right_operand = self.right_operand.parse_or_and()
+        self.right_operand = self.right_operand.parse_or_and()
 
         # if operator is OR then only we need to check
         if self.operator == "|":
             left_end = type(self.left_operand) == BinaryOperation and self.left_operand.operator == "&"
             right_end = type(self.right_operand) == BinaryOperation and self.right_operand.operator == "&"
 
+            # case (A&B)|(C&D) --- (A|C)&(A|D)&(B|C)&(B|D)
             if left_end & right_end:
                 # first left
                 fl = self.left_operand.left_operand
@@ -196,6 +234,7 @@ class BinaryOperation(object):
 
                 return BinaryOperation("&", new_left, new_right).parse_or_and()
 
+            # case (A&B)|C --- (A|C)&(B|C)
             elif left_end:
                 # first left
                 fl = self.left_operand.left_operand
@@ -208,6 +247,7 @@ class BinaryOperation(object):
                 new_right = BinaryOperation("|", fr, s).parse_or_and()
                 return BinaryOperation("&", new_left, new_right).parse_or_and()
 
+            # case A&(B|C) --- (A|B)&(A|C)
             elif right_end:
                 # first
                 f = self.left_operand
@@ -220,61 +260,62 @@ class BinaryOperation(object):
                 new_right = BinaryOperation("|", f, sr).parse_or_and()
                 return BinaryOperation("&", new_left, new_right).parse_or_and()
 
+        # if operator is not OR then return itself
         return self
 
-    # def optimize_v1(self):
-    #     # method is deprecated in subsequent use
-    #     # This method is only written for OR Operation
-    #     if not self.operator == "|":
-    #         return self
-    #
-    #     if type(self.left_operand) is BinaryOperation:
-    #         self.left_operand = self.left_operand.optimize()
-    #
-    #     if type(self.right_operand) is BinaryOperation:
-    #         self.right_operand = self.right_operand.optimize()
-    #         right_none = True
-    #
-    #     if not self.left_operand and not self.right_operand:
-    #         return None
-    #
-    #     if not self.left_operand:
-    #         return self.right_operand
-    #
-    #     if not self.right_operand:
-    #         return self.left_operand
-    #
-    #     # A OR A = A
-    #     if self.left_operand == self.right_operand:
-    #         return self.left_operand
-    #
-    #     # (A OR B) OR A = A OR B
-    #     if type(self.left_operand) is BinaryOperation and type(self.right_operand) is not BinaryOperation:
-    #         ll = self.left_operand.left_operand
-    #         lr = self.left_operand.right_operand
-    #         r = self.right_operand
-    #
-    #         if ll == r or lr == r:
-    #             return self.left_operand
-    #
-    #     # A OR (A OR B) = (A OR B)
-    #     if type(self.right_operand) is BinaryOperation and type(self.left_operand) is not BinaryOperation:
-    #         _l = self.left_operand
-    #         rl = self.right_operand.left_operand
-    #         rr = self.right_operand.right_operand
-    #
-    #         if _l == rl or _l == rr:
-    #             return self.right_operand
-    #
-    #     # A OR !A = True -> ignore this
-    #     if self.left_operand == UnaryOperation("!", self.right_operand).parse_not():
-    #         return None
-    #
-    #     return self
+    def optimize_v1(self):
+        # method is deprecated as it's improved version exists
+
+        # This method is only written for OR Operation
+        if not self.operator == "|":
+            return self
+
+        if type(self.left_operand) is BinaryOperation:
+            self.left_operand = self.left_operand.optimize()
+
+        if type(self.right_operand) is BinaryOperation:
+            self.right_operand = self.right_operand.optimize()
+
+        if not self.left_operand and not self.right_operand:
+            return None
+
+        if not self.left_operand:
+            return self.right_operand
+
+        if not self.right_operand:
+            return self.left_operand
+
+        # A OR A = A
+        if self.left_operand == self.right_operand:
+            return self.left_operand
+
+        # (A OR B) OR A = A OR B
+        if type(self.left_operand) is BinaryOperation and type(self.right_operand) is not BinaryOperation:
+            ll = self.left_operand.left_operand
+            lr = self.left_operand.right_operand
+            r = self.right_operand
+
+            if ll == r or lr == r:
+                return self.left_operand
+
+        # A OR (A OR B) = (A OR B)
+        if type(self.right_operand) is BinaryOperation and type(self.left_operand) is not BinaryOperation:
+            _l = self.left_operand
+            rl = self.right_operand.left_operand
+            rr = self.right_operand.right_operand
+
+            if _l == rl or _l == rr:
+                return self.right_operand
+
+        # A OR !A = True -> ignore this
+        if self.left_operand == UnaryOperation("!", self.right_operand).parse_not():
+            return None
+
+        return self
 
     def optimize(self):
         # this function is defined only for OR function
-        if not self.operator == "|":
+        if self.operator != "|":
             return self
 
         # segregate everything by OR
@@ -302,7 +343,6 @@ class BinaryOperation(object):
             if len(arr) == 2:
                 return BinaryOperation(symbol, arr[0], arr[1])
 
-            m = 0
             if len(arr) % 2 == 0:
                 m = len(arr) // 2
             else:

@@ -120,7 +120,7 @@ class BinaryOperation(object):
         ret = ""
         ret += f'({lo})' if len(lo) > 2 else f'{lo}'
         ret += f'{o}'
-        ret += f'({o})' if len(ro) > 2 else f'{ro}'
+        ret += f'({ro})' if len(ro) > 2 else f'{ro}'
         return ret
 
     def __repr__(self):

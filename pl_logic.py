@@ -244,6 +244,62 @@ class PLLogicProblem(object):
     #             break
     #     return ret
 
+    # def prove(self):
+    #     def is_resolvable(cl1, cl2):
+    #         literals1 = cl1.segregate("|") if type(cl1) is BinaryOperation else [cl1]
+    #         literals2 = cl2.segregate("|") if type(cl2) is BinaryOperation else [cl2]
+    #         for literal in literals2:
+    #             if UnaryOperation("!", literal).parse_not() in literals1:
+    #                 return True
+    #         return False
+    #
+    #     def find_resolvable_pair(cls, qcls, visited):
+    #         # check query clauses with all clauses see if any pair is resolvable
+    #         selected_pairs = []
+    #         for q in qcls:
+    #             for a in cls + qcls:
+    #                 if q != a and is_resolvable(q, a):
+    #                     select_pair = Pair(q, a)
+    #                     if select_pair not in visited and select_pair not in selected_pairs:
+    #                         selected_pairs.append(select_pair)
+    #         # sort by length of pair, we are preferring unit resolution
+    #         selected_pairs.sort(key=lambda x: len(x))
+    #         return selected_pairs[0] if selected_pairs else None
+    #
+    #     kb_clauses = list(self.segregated_knowledge_base_clauses)
+    #     query_clauses = list(self.segregated_query_clauses)
+    #     self.steps_to_prove = []
+    #
+    #     resolved_pairs = []
+    #
+    #     # Execute till you find clauses
+    #     while True:
+    #         # find resolvable pair
+    #         pair = find_resolvable_pair(kb_clauses, query_clauses, resolved_pairs)
+    #
+    #         # if we don't have pair then query is false
+    #         if not pair:
+    #             self.is_query_true = False
+    #             return
+    #
+    #         # resolve pair
+    #         pair.resolve()
+    #
+    #         # add pair to resolved pair
+    #         resolved_pairs.append(pair)
+    #
+    #         # add pair to steps of proof
+    #         self.steps_to_prove.append(pair)
+    #
+    #         # does pair proves contradiction
+    #         if pair.is_contradict:
+    #             self.is_query_true = True
+    #             return
+    #
+    #         # add resolvent to query clause if already not present
+    #         if pair.resolvent and pair.resolvent not in query_clauses:
+    #             query_clauses.append(pair.resolvent)
+
     def prove(self):
         def is_resolvable(cl1, cl2):
             literals1 = cl1.segregate("|") if type(cl1) is BinaryOperation else [cl1]
@@ -253,14 +309,14 @@ class PLLogicProblem(object):
                     return True
             return False
 
-        def find_resolvable_pair(cls, qcls, visited):
+        def find_resolvable_pair(cls, visited):
             # check query clauses with all clauses see if any pair is resolvable
             selected_pairs = []
-            for q in qcls:
-                for a in cls + qcls:
-                    if q != a and is_resolvable(q, a):
+            for q in cls:
+                for a in cls:
+                    if not q == a and is_resolvable(q, a):
                         select_pair = Pair(q, a)
-                        if select_pair not in visited and select_pair not in selected_pairs:
+                        if not (select_pair in visited or select_pair in selected_pairs):
                             selected_pairs.append(select_pair)
             # sort by length of pair, we are preferring unit resolution
             selected_pairs.sort(key=lambda x: len(x))
@@ -269,13 +325,13 @@ class PLLogicProblem(object):
         kb_clauses = list(self.segregated_knowledge_base_clauses)
         query_clauses = list(self.segregated_query_clauses)
         self.steps_to_prove = []
-
         resolved_pairs = []
 
+        clauses = kb_clauses + query_clauses
         # Execute till you find clauses
         while True:
             # find resolvable pair
-            pair = find_resolvable_pair(kb_clauses, query_clauses, resolved_pairs)
+            pair = find_resolvable_pair(clauses, resolved_pairs)
 
             # if we don't have pair then query is false
             if not pair:
@@ -297,5 +353,5 @@ class PLLogicProblem(object):
                 return
 
             # add resolvent to query clause if already not present
-            if pair.resolvent and pair.resolvent not in query_clauses:
-                query_clauses.append(pair.resolvent)
+            if pair.resolvent and pair.resolvent not in clauses:
+                clauses.append(pair.resolvent)

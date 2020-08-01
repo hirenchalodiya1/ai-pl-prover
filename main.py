@@ -73,7 +73,7 @@ def run(hard_input=False):
         # avoid flag: this flag is designed for HackerRank
         # force flag: if true then mode parameter will be ignored and everything will print
         # force flag: this flag is designed for development or curiosity !!
-        pl_problem.print_result(avoid=False, force=True)
+        pl_problem.print_result(avoid=False, force=False)
 
 
 if __name__ == "__main__":
